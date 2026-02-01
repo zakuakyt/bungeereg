@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Bungee Analyzer: Iterative Predictor (Metric/Imperial)</title>
+    <title>Bungee Analyzer: Iterative Predictor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.20.0.min.js"></script>
     <style>
@@ -18,30 +18,29 @@
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         .outlier-row { background-color: #ffe6e6; text-decoration: line-through; color: #c0392b; }
         .highlight { color: #27ae60; font-weight: bold; font-size: 1.2em; }
-        input { padding: 8px; width: 100px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        label { font-weight: bold; font-size: 0.9em; display: block; margin-bottom: 5px; }
+        input { padding: 8px; width: 80px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>Bungee Analyzer</h1>
-    <p><b>Data Format:</b> height(m) mass(kg) chord(m) distance(cm)</p>
-    <textarea id="dataInput">height(m) mass(kg) chord(m) distance(cm)
-1.77 0.20 0.25 3.5
-1.77 0.20 0.00 31.0
-1.77 0.20 0.26 2.5
-1.77 0.20 0.27 0.5
-1.77 0.25 0.25 0.8
-1.77 0.25 0.00 29.0
-1.77 0.25 0.10 17.0
-2.03 0.34 0.55 16.0
-2.03 0.34 0.60 9.0
-2.03 0.34 0.65 3.0
-2.03 0.34 0.67 1.0
-2.03 0.48 0.50 16.0
-2.03 0.48 0.60 4.0
-2.03 0.48 0.63 1.0</textarea>
+    <p>Paste data (headers: height mass chord distance):</p>
+    <textarea id="dataInput">height mass chord distance
+69.75 200.35 0.25 3.5
+69.75 200.35 0.00 31.0
+69.75 200.35 0.26 2.5
+69.75 200.35 0.27 0.5
+69.75 251.54 0.25 0.8
+69.75 251.54 0.00 29.0
+69.75 251.54 0.10 17.0
+80.00 344.32 0.55 16.0
+80.00 344.32 0.60 9.0
+80.00 344.32 0.65 3.0
+80.00 344.32 0.67 1.0
+80.00 485.84 0.50 16.0
+80.00 485.84 0.60 4.0
+80.00 485.84 0.63 1.0</textarea>
     
     <button onclick="analyze()">Perform Dual Analysis</button>
 
@@ -49,70 +48,62 @@
         <div class="grid">
             <div class="card">
                 <h3>1. Original (All Data)</h3>
-                <p>R² Score: <b id="r2_orig"></b></p>
-                <div id="eq_orig" style="font-size:0.8em; font-family:monospace; color: #666;"></div>
+                <p>R²: <b id="r2_orig"></b></p>
+                <div id="eq_orig" style="font-size:0.8em; font-family:monospace;"></div>
             </div>
 
             <div class="card cleaned">
-                <h3>2. Cleaned (Outliers Removed)</h3>
-                <p>R² Score: <b id="r2_clean"></b></p>
+                <h3>2. Cleaned (No Outliers)</h3>
+                <p>R²: <b id="r2_clean"></b></p>
                 <div id="eq_clean" style="font-size:0.8em; font-family:monospace; font-weight:bold;"></div>
             </div>
         </div>
 
         <div class="predictor-box">
             <h3>Target Predictor</h3>
-            <p>Calculate the chord needed for your specific setup:</p>
-            <div style="display:flex; gap: 15px; flex-wrap: wrap;">
-                <div>
-                    <label>Drop Height (m)</label>
-                    <input type="number" id="predH" step="0.01" value="2.03"> 
-                </div>
-                <div>
-                    <label>Load Mass (kg)</label>
-                    <input type="number" id="predM" step="0.01" value="0.45">
-                </div>
-                <div>
-                    <label>Target Ground Clearance (cm)</label>
-                    <input type="number" id="targetD" step="0.1" value="0.5">
-                    <p style="font-size: 0.7em; color: #666;">(Aim between 0 and 1 cm)</p>
-                </div>
-            </div>
+            <p>Enter the conditions for your next drop:</p>
+            Drop Height (H): <input type="number" id="predH" step="0.1" value="80"> 
+            Mass (M): <input type="number" id="predM" step="0.1" value="400">
+            <button onclick="predictChord()" style="background:#2980b9">Calculate Optimal Chord</button>
             
-            <button onclick="predictChord()" style="background:#2980b9; margin-top: 10px;">Calculate Optimal Chord</button>
-            
-            <div id="predictionResult" style="margin-top:20px; display:none; background: white; padding: 15px; border-radius: 5px;">
-                Recommended Chord Length: <span class="highlight" id="optChord">--</span> <b>meters (m)</b>
+            <div id="predictionResult" style="margin-top:15px; display:none;">
+                Recommended Chord Length: <span class="highlight" id="optChord">--</span> meters
+                <p><small><i>This length aims for a clearance of 0.5 cm.</i></small></p>
                 <hr>
-                <p><b>Test Feedback:</b> Add your results to improve the model:</p>
-                Actual Distance Achieved (cm): <input type="number" id="actualDist" step="0.1" placeholder="e.g. 0.7">
-                <button onclick="appendToData()" style="background:#27ae60">Confirm & Add Result</button>
+                <p><b>Test Result:</b> After dropping, enter the actual distance achieved:</p>
+                Actual Distance (cm): <input type="number" id="actualDist" step="0.1" placeholder="e.g. 0.8">
+                <button onclick="appendToData()" style="background:#27ae60">Confirm & Add to Dataset</button>
             </div>
         </div>
 
         <div id="mainPlot"></div>
-        <h3>Data Log & Residuals</h3>
+        <h3>Data Review</h3>
         <div id="tableOutput"></div>
     </div>
 </div>
 
 <script>
-let globalCoeffs = [];
+let globalCoeffs = []; // To store cleaned coefficients for prediction
 
 function solveRegression(h, m, c, y) {
-    const X = h.map((_, i) => [1, h[i], m[i], c[i], h[i]**2, m[i]**2, c[i]**2]);
+    // STABLE MATRIX: [1, h, m, c, h^2] 
+    // We remove m^2 and c^2 to prevent the "Trillion" error
+    const X = h.map((_, i) => [1, h[i], m[i], c[i], h[i]**2]);
     const Xt = math.transpose(X);
     const XtX = math.multiply(Xt, X);
     const Xty = math.multiply(Xt, y);
-    const coeffs = math.lusolve(XtX, Xty).map(val => val[0]);
+    
+    // Using pinv (pseudo-inverse) is safer against giant numbers
+    const XtX_inv = math.pinv(XtX);
+    const coeffs = math.multiply(XtX_inv, Xty).map(val => val);
     
     const yPred = X.map(row => math.multiply(row, coeffs));
     const residuals = y.map((val, i) => val - yPred[i]);
     const r2 = 1 - (math.sum(residuals.map(r => r**2)) / math.sum(y.map(val => (val - math.mean(y))**2)));
     
-    let eqTerms = ["", "h", "m", "c", "h²", "m²", "c²"];
+    let eqTerms = ["", "h", "m", "c", "h²"];
     let formula = `${coeffs[0].toFixed(4)}`;
-    for(let i=1; i<7; i++) {
+    for(let i=1; i<coeffs.length; i++) {
         formula += ` ${coeffs[i] >= 0 ? '+' : '-'} ${Math.abs(coeffs[i]).toFixed(4)}${eqTerms[i]}`;
     }
     
@@ -134,7 +125,7 @@ function analyze() {
 
     const orig = solveRegression(h, m, c, y);
     const stdDev = math.std(orig.residuals);
-    const isOutlier = orig.residuals.map(r => Math.abs(r) > (1.2 * stdDev));
+    const isOutlier = orig.residuals.map(r => Math.abs(r) > (1.5 * stdDev));
 
     let h_c = [], m_c = [], c_c = [], y_c = [];
     isOutlier.forEach((out, i) => {
@@ -144,54 +135,46 @@ function analyze() {
     });
 
     const cleaned = solveRegression(h_c, m_c, c_c, y_c);
-    globalCoeffs = cleaned.coeffs;
+    globalCoeffs = cleaned.coeffs; // Store for predictor
 
     document.getElementById('resultsView').style.display = 'block';
     document.getElementById('r2_orig').innerText = orig.r2.toFixed(4);
-    document.getElementById('eq_orig').innerText = "d(cm) = " + orig.formula;
+    document.getElementById('eq_orig').innerText = "d = " + orig.formula;
     document.getElementById('r2_clean').innerText = cleaned.r2.toFixed(4);
-    document.getElementById('eq_clean').innerText = "d(cm) = " + cleaned.formula;
+    document.getElementById('eq_clean').innerText = "d = " + cleaned.formula;
 
-    let tableHtml = '<table><tr><th>H (m)</th><th>M (kg)</th><th>C (m)</th><th>Dist (cm)</th><th>Status</th></tr>';
+    let tableHtml = '<table><tr><th>H</th><th>M</th><th>C</th><th>Actual</th><th>Status</th></tr>';
     rows.forEach((row, i) => {
         tableHtml += `<tr class="${isOutlier[i] ? 'outlier-row' : ''}">
             <td>${h[i]}</td><td>${m[i]}</td><td>${c[i]}</td><td>${y[i]}</td>
-            <td>${isOutlier[i] ? "Outlier" : "Fitted"}</td></tr>`;
+            <td>${isOutlier[i] ? "outlier" : "fitted"}</td></tr>`;
     });
     document.getElementById('tableOutput').innerHTML = tableHtml + '</table>';
 
     Plotly.newPlot('mainPlot', [
-        { x: c, y: y, mode: 'markers', name: 'Original Data', marker: {color: 'grey', opacity: 0.4} },
-        { x: c_c, y: y_c, mode: 'markers', name: 'Cleaned Data', marker: {color: 'green', size: 10} }
-    ], { title: 'Chord (m) vs Distance (cm)', xaxis:{title:'Chord Length (meters)'}, yaxis:{title:'Ground Distance (cm)'} });
+        { x: c, y: y, mode: 'markers', name: 'Raw Data', marker: {color: 'grey', opacity: 0.5} },
+        { x: c_c, y: y_c, mode: 'markers', name: 'Clean Data', marker: {color: 'blue', size: 10} }
+    ], { title: 'Chord Length (M) vs Distance (cm)', xaxis:{title:'Chord (m)'}, yaxis:{title:'Dist (cm)'} });
 }
 
-function predictChord() {
-    if(globalCoeffs.length === 0) return alert("Please run analysis first.");
+ffunction predictChord() {
+    if(globalCoeffs.length === 0) return alert("Run analysis first.");
     
     const h = parseFloat(document.getElementById('predH').value);
     const m = parseFloat(document.getElementById('predM').value);
     const targetD = parseFloat(document.getElementById('targetD').value);
 
     const b = globalCoeffs;
-    const k = b[0] + (b[1]*h) + (b[2]*m) + (b[4]*h**2) + (b[5]*m**2) - targetD;
-    const l = b[3];
-    const q = b[6];
+    // d = b0 + b1h + b2m + b3c + b4h^2
+    // Solve for c: c = (targetD - b0 - b1h - b2m - b4h^2) / b3
+    const c = (targetD - b[0] - b[1]*h - b[2]*m - b[4]*h**2) / b[3];
 
-    const disc = (l**2) - (4 * q * k);
-    
-    if(disc < 0) {
-        alert("The model cannot find a physical chord length to reach that distance. Try a different target.");
-        return;
+    if (c < 0 || c > h) {
+        alert("The model suggests this drop is physically impossible with current chord types.");
+    } else {
+        document.getElementById('optChord').innerText = c.toFixed(4);
+        document.getElementById('predictionResult').style.display = 'block';
     }
-
-    const s1 = (-l + Math.sqrt(disc)) / (2 * q);
-    const s2 = (-l - Math.sqrt(disc)) / (2 * q);
-
-    let bestC = (s1 > 0) ? s1 : s2;
-    
-    document.getElementById('optChord').innerText = bestC.toFixed(4);
-    document.getElementById('predictionResult').style.display = 'block';
 }
 
 function appendToData() {
@@ -200,13 +183,15 @@ function appendToData() {
     const c = document.getElementById('optChord').innerText;
     const dist = document.getElementById('actualDist').value;
 
-    if(!dist) return alert("Enter the actual distance result.");
+    if(!dist) return alert("Enter the actual distance first!");
 
     const newData = `\n${h} ${m} ${c} ${dist}`;
     document.getElementById('dataInput').value += newData;
     
-    alert("New trial added. Re-analyzing...");
+    alert("New data point added! Re-running analysis...");
     analyze();
+    
+    // Reset predictor
     document.getElementById('predictionResult').style.display = 'none';
     document.getElementById('actualDist').value = "";
 }
