@@ -6,26 +6,33 @@
     <script src="https://cdn.plot.ly/plotly-2.20.0.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 40px; background: #f4f7f6; color: #333; }
-        .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        textarea { width: 100%; height: 180px; font-family: monospace; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
-        button { background: #2c3e50; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 4px; font-size: 16px; transition: 0.3s; }
+        .container { max-width: 1050px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        textarea { width: 100%; height: 180px; font-family: monospace; font-size: 0.85em; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; box-sizing: border-box; }
+        button { background: #2c3e50; color: white; border: none; padding: 12px 20px; cursor: pointer; border-radius: 4px; font-size: 15px; transition: 0.3s; }
         button:hover { background: #34495e; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
         .card { padding: 15px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
         .cleaned { border-left: 5px solid #27ae60; background: #f0fff4; }
         .predictor-box { background: #e8eff5; padding: 20px; border-radius: 8px; margin-top: 30px; border: 1px solid #b8c9d6; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .outlier-row { background-color: #ffe6e6; text-decoration: line-through; color: #c0392b; }
-        .highlight { color: #27ae60; font-weight: bold; font-size: 1.2em; }
-        input { padding: 8px; width: 80px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.88em; }
+        th, td { border: 1px solid #ddd; padding: 7px 9px; text-align: left; }
+        th { background: #2c3e50; color: white; }
+        .outlier-row { background-color: #ffe6e6; color: #c0392b; }
+        .outlier-row td { text-decoration: line-through; }
+        .highlight { color: #27ae60; font-weight: bold; font-size: 1.3em; }
+        .input-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+        .input-row label { min-width: 140px; font-weight: 600; color: #2c3e50; }
+        .input-row input { padding: 8px; width: 100px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+        .eq-box { font-family: monospace; font-size: 0.82em; margin-top: 6px; color: #555; word-break: break-all; }
+        .pred-result { margin-top: 18px; padding: 14px; background: #fff; border-radius: 6px; border: 1px solid #c8dce8; }
+        .plots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+        @media (max-width: 700px) { .grid, .plots { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-
 <div class="container">
     <h1>Bungee Analyzer</h1>
-    <p>Paste data (headers: height mass chord distance):</p>
+    <p>Paste data below (whitespace-separated, header row required: <code>height mass chord distance</code>):</p>
     <textarea id="dataInput">height mass chord distance
 69.75 200.35 0.25 3.5
 69.75 200.35 0.00 31.0
@@ -41,80 +48,119 @@
 80.00 485.84 0.50 16.0
 80.00 485.84 0.60 4.0
 80.00 485.84 0.63 1.0</textarea>
-    
+
     <button onclick="analyze()">Perform Dual Analysis</button>
 
     <div id="resultsView" style="display:none;">
         <div class="grid">
             <div class="card">
-                <h3>1. Original (All Data)</h3>
-                <p>R²: <b id="r2_orig"></b></p>
-                <div id="eq_orig" style="font-size:0.8em; font-family:monospace;"></div>
+                <h3>① Original (All Data)</h3>
+                <p style="margin-bottom:4px;">R² = <b id="r2_orig">—</b></p>
+                <div class="eq-box" id="eq_orig"></div>
             </div>
-
             <div class="card cleaned">
-                <h3>2. Cleaned (No Outliers)</h3>
-                <p>R²: <b id="r2_clean"></b></p>
-                <div id="eq_clean" style="font-size:0.8em; font-family:monospace; font-weight:bold;"></div>
+                <h3>② Cleaned (Outliers Removed)</h3>
+                <p style="margin-bottom:4px;">R² = <b id="r2_clean">—</b></p>
+                <div class="eq-box" id="eq_clean"></div>
             </div>
         </div>
 
+        <!-- PREDICTOR -->
         <div class="predictor-box">
-            <h3>Target Predictor</h3>
-            <p>Enter the conditions for your next drop:</p>
-            Drop Height (H): <input type="number" id="predH" step="0.1" value="80"> 
-            Mass (M): <input type="number" id="predM" step="0.1" value="400">
-            <button onclick="predictChord()" style="background:#2980b9">Calculate Optimal Chord</button>
-            
-            <div id="predictionResult" style="margin-top:15px; display:none;">
-                Recommended Chord Length: <span class="highlight" id="optChord">--</span> meters
-                <p><small><i>This length aims for a clearance of 0.5 cm.</i></small></p>
-                <hr>
-                <p><b>Test Result:</b> After dropping, enter the actual distance achieved:</p>
-                Actual Distance (cm): <input type="number" id="actualDist" step="0.1" placeholder="e.g. 0.8">
-                <button onclick="appendToData()" style="background:#27ae60">Confirm & Add to Dataset</button>
+            <h3>🎯 Target Predictor</h3>
+            <p style="margin-bottom:12px; color:#555;">Uses the <b>cleaned</b> linear model to solve for the chord length that hits a target clearance.</p>
+
+            <div class="input-row">
+                <label>Drop Height (m):</label>
+                <input type="number" id="predH" step="0.01" value="80">
+            </div>
+            <div class="input-row">
+                <label>Mass (kg):</label>
+                <input type="number" id="predM" step="0.01" value="400">
+            </div>
+            <div class="input-row">
+                <label>Target Distance (cm):</label>
+                <input type="number" id="targetD" step="0.1" value="0.5">
+            </div>
+            <button onclick="predictChord()" style="background:#2980b9; margin-top:6px;">Calculate Optimal Chord</button>
+
+            <div class="pred-result" id="predictionResult" style="display:none;">
+                <p style="margin-top:0;"><b>Recommended Chord:</b> <span class="highlight" id="optChord">—</span> m</p>
+                <p style="margin:0; color:#666; font-size:0.88em;">
+                    Model predicts this chord will land <b id="predTarget">—</b> cm from the ground
+                    (target was <b id="predTargetLabel">—</b> cm).
+                </p>
+                <hr style="margin:12px 0;">
+                <p style="margin-bottom:6px;"><b>Log Result:</b> After the drop, enter what actually happened:</p>
+                <div class="input-row">
+                    <label>Actual Distance (cm):</label>
+                    <input type="number" id="actualDist" step="0.1" placeholder="e.g. 0.8">
+                </div>
+                <button onclick="appendToData()" style="background:#27ae60;">✓ Confirm & Add to Dataset</button>
             </div>
         </div>
 
-        <div id="mainPlot"></div>
-        <h3>Data Review</h3>
+        <!-- PLOTS -->
+        <div class="plots">
+            <div id="plotPredVsActual"></div>
+            <div id="plotResiduals"></div>
+        </div>
+
+        <!-- TABLE -->
+        <h3 style="margin-top:28px;">Data Review</h3>
         <div id="tableOutput"></div>
     </div>
 </div>
 
 <script>
-let globalCoeffs = []; // To store cleaned coefficients for prediction
+// ────────────────────────────────────────────────
+// Globals
+// ────────────────────────────────────────────────
+let globalCoeffs = [];       // cleaned model coefficients
+let globalCleanIdx = [];     // which indices survived cleaning
 
+// ────────────────────────────────────────────────
+// Pure LINEAR regression: d = b0 + b1·h + b2·m + b3·c
+// Design matrix X = [1, h, m, c]
+// ────────────────────────────────────────────────
 function solveRegression(h, m, c, y) {
-    // STABLE MATRIX: [1, h, m, c, h^2] 
-    // We remove m^2 and c^2 to prevent the "Trillion" error
-    const X = h.map((_, i) => [1, h[i], m[i], c[i], h[i]**2]);
-    const Xt = math.transpose(X);
-    const XtX = math.multiply(Xt, X);
-    const Xty = math.multiply(Xt, y);
-    
-    // Using pinv (pseudo-inverse) is safer against giant numbers
-    const XtX_inv = math.pinv(XtX);
-    const coeffs = math.multiply(XtX_inv, Xty).map(val => val);
-    
-    const yPred = X.map(row => math.multiply(row, coeffs));
-    const residuals = y.map((val, i) => val - yPred[i]);
-    const r2 = 1 - (math.sum(residuals.map(r => r**2)) / math.sum(y.map(val => (val - math.mean(y))**2)));
-    
-    let eqTerms = ["", "h", "m", "c", "h²"];
-    let formula = `${coeffs[0].toFixed(4)}`;
-    for(let i=1; i<coeffs.length; i++) {
-        formula += ` ${coeffs[i] >= 0 ? '+' : '-'} ${Math.abs(coeffs[i]).toFixed(4)}${eqTerms[i]}`;
+    const n = h.length;
+    // Build design matrix
+    const X = h.map((_, i) => [1, h[i], m[i], c[i]]);
+    const Xt   = math.transpose(X);
+    const XtX  = math.multiply(Xt, X);
+    const Xty  = math.multiply(Xt, y);
+
+    // Pseudo-inverse solve (numerically safe)
+    const coeffs = math.multiply(math.pinv(XtX), Xty).map(v => Number(v));
+
+    // Predictions & R²
+    const yPred   = X.map(row => math.dot(row, coeffs));
+    const yMean   = math.mean(y);
+    const ssRes   = math.sum(y.map((v, i) => (v - yPred[i]) ** 2));
+    const ssTot   = math.sum(y.map(v  => (v - yMean) ** 2));
+    const r2      = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+    const residuals = y.map((v, i) => v - yPred[i]);
+
+    // Pretty equation string
+    const labels = ['', 'h', 'm', 'c'];
+    let formula = coeffs[0].toFixed(4);
+    for (let i = 1; i < coeffs.length; i++) {
+        const sign = coeffs[i] >= 0 ? '+' : '−';
+        formula += ` ${sign} ${Math.abs(coeffs[i]).toFixed(4)}·${labels[i]}`;
     }
-    
+
     return { coeffs, yPred, residuals, r2, formula };
 }
 
+// ────────────────────────────────────────────────
+// Main analysis
+// ────────────────────────────────────────────────
 function analyze() {
     const input = document.getElementById('dataInput').value.trim();
-    const rows = input.split('\n').map(r => r.trim().split(/\s+/));
-    rows.shift(); 
-    
+    const rows  = input.split('\n').map(r => r.trim().split(/\s+/));
+    rows.shift(); // drop header
+
     let h = [], m = [], c = [], y = [];
     rows.forEach(row => {
         h.push(parseFloat(row[0]));
@@ -123,77 +169,159 @@ function analyze() {
         y.push(parseFloat(row[3]));
     });
 
+    // ── Original fit ──
     const orig = solveRegression(h, m, c, y);
-    const stdDev = math.std(orig.residuals);
-    const isOutlier = orig.residuals.map(r => Math.abs(r) > (1.5 * stdDev));
 
+    // ── Outlier detection: flag points with |residual| > 1.5 × std ──
+    const stdDev   = math.std(orig.residuals);
+    const isOutlier = orig.residuals.map(r => Math.abs(r) > 1.5 * stdDev);
+
+    // ── Cleaned arrays ──
     let h_c = [], m_c = [], c_c = [], y_c = [];
+    globalCleanIdx = [];
     isOutlier.forEach((out, i) => {
-        if(!out) {
+        if (!out) {
             h_c.push(h[i]); m_c.push(m[i]); c_c.push(c[i]); y_c.push(y[i]);
+            globalCleanIdx.push(i);
         }
     });
 
     const cleaned = solveRegression(h_c, m_c, c_c, y_c);
-    globalCoeffs = cleaned.coeffs; // Store for predictor
+    globalCoeffs = cleaned.coeffs;   // used by predictor
 
+    // ── UI: summary cards ──
     document.getElementById('resultsView').style.display = 'block';
-    document.getElementById('r2_orig').innerText = orig.r2.toFixed(4);
-    document.getElementById('eq_orig').innerText = "d = " + orig.formula;
+    document.getElementById('r2_orig').innerText  = orig.r2.toFixed(4);
+    document.getElementById('eq_orig').innerText  = 'd = ' + orig.formula;
     document.getElementById('r2_clean').innerText = cleaned.r2.toFixed(4);
-    document.getElementById('eq_clean').innerText = "d = " + cleaned.formula;
+    document.getElementById('eq_clean').innerText = 'd = ' + cleaned.formula;
 
-    let tableHtml = '<table><tr><th>H</th><th>M</th><th>C</th><th>Actual</th><th>Status</th></tr>';
-    rows.forEach((row, i) => {
-        tableHtml += `<tr class="${isOutlier[i] ? 'outlier-row' : ''}">
+    // ── UI: data table ──
+    let tableHtml = '<table><tr><th>#</th><th>H</th><th>M</th><th>C</th><th>Actual</th><th>Predicted</th><th>Residual</th><th>Status</th></tr>';
+    rows.forEach((_, i) => {
+        const cls  = isOutlier[i] ? 'outlier-row' : '';
+        const pred = orig.yPred[i].toFixed(2);
+        const res  = orig.residuals[i].toFixed(2);
+        tableHtml += `<tr class="${cls}">
+            <td>${i+1}</td>
             <td>${h[i]}</td><td>${m[i]}</td><td>${c[i]}</td><td>${y[i]}</td>
-            <td>${isOutlier[i] ? "outlier" : "fitted"}</td></tr>`;
+            <td>${pred}</td><td>${res}</td>
+            <td>${isOutlier[i] ? '⚠ outlier' : '✓ fitted'}</td></tr>`;
     });
     document.getElementById('tableOutput').innerHTML = tableHtml + '</table>';
 
-    Plotly.newPlot('mainPlot', [
-        { x: c, y: y, mode: 'markers', name: 'Raw Data', marker: {color: 'grey', opacity: 0.5} },
-        { x: c_c, y: y_c, mode: 'markers', name: 'Clean Data', marker: {color: 'blue', size: 10} }
-    ], { title: 'Chord Length (M) vs Distance (cm)', xaxis:{title:'Chord (m)'}, yaxis:{title:'Dist (cm)'} });
+    // ── Plot 1: Predicted vs Actual (cleaned model predictions on ALL points) ──
+    // Re-predict every point using the CLEANED model for a fair comparison
+    const allPredClean = h.map((_, i) => {
+        const b = globalCoeffs;
+        return b[0] + b[1]*h[i] + b[2]*m[i] + b[3]*c[i];
+    });
+
+    Plotly.newPlot('plotPredVsActual', [
+        {
+            x: y, y: allPredClean,
+            mode: 'markers',
+            marker: { color: isOutlier.map(o => o ? '#e74c3c' : '#2980b9'), size: 9 },
+            name: 'All points',
+            text: h.map((_, i) => `#${i+1} H=${h[i]} M=${m[i]} C=${c[i]}<br>Actual=${y[i]}  Pred=${allPredClean[i].toFixed(2)}`),
+            hoverinfo: 'text'
+        },
+        {   // 1:1 reference line
+            x: [0, Math.max(...y) * 1.05],
+            y: [0, Math.max(...y) * 1.05],
+            mode: 'lines',
+            line: { color: '#aaa', dash: 'dash' },
+            name: 'Perfect prediction',
+            showlegend: true
+        }
+    ], {
+        title: 'Predicted vs Actual Distance',
+        xaxis: { title: 'Actual (cm)' },
+        yaxis: { title: 'Predicted (cm)' },
+        legend: { orientation: 'h', y: -0.15 },
+        margin: { t: 40, b: 50, l: 50, r: 20 }
+    });
+
+    // ── Plot 2: Residuals (cleaned model) ──
+    const resClean = y.map((v, i) => v - allPredClean[i]);
+    Plotly.newPlot('plotResiduals', [
+        {
+            x: h.map((_, i) => i + 1),
+            y: resClean,
+            mode: 'markers+lines',
+            marker: { color: isOutlier.map(o => o ? '#e74c3c' : '#27ae60'), size: 8 },
+            line: { color: '#ccc', width: 1 },
+            text: h.map((_, i) => `#${i+1} res = ${resClean[i].toFixed(2)} cm`),
+            hoverinfo: 'text'
+        },
+        {   // zero line
+            x: [0.5, h.length + 0.5],
+            y: [0, 0],
+            mode: 'lines',
+            line: { color: '#999', dash: 'dash' },
+            showlegend: false
+        }
+    ], {
+        title: 'Residuals (cleaned model)',
+        xaxis: { title: 'Point #' },
+        yaxis: { title: 'Residual (cm)' },
+        margin: { t: 40, b: 50, l: 50, r: 20 }
+    });
 }
 
-ffunction predictChord() {
-    if(globalCoeffs.length === 0) return alert("Run analysis first.");
-    
-    const h = parseFloat(document.getElementById('predH').value);
-    const m = parseFloat(document.getElementById('predM').value);
+// ────────────────────────────────────────────────
+// Predictor: solve for chord
+//   d = b0 + b1·h + b2·m + b3·c
+//   → c = (d − b0 − b1·h − b2·m) / b3
+// ────────────────────────────────────────────────
+function predictChord() {
+    if (globalCoeffs.length === 0) return alert("Run the analysis first.");
+
+    const h       = parseFloat(document.getElementById('predH').value);
+    const m       = parseFloat(document.getElementById('predM').value);
     const targetD = parseFloat(document.getElementById('targetD').value);
 
-    const b = globalCoeffs;
-    // d = b0 + b1h + b2m + b3c + b4h^2
-    // Solve for c: c = (targetD - b0 - b1h - b2m - b4h^2) / b3
-    const c = (targetD - b[0] - b[1]*h - b[2]*m - b[4]*h**2) / b[3];
+    if (isNaN(h) || isNaN(m) || isNaN(targetD)) return alert("All fields must be valid numbers.");
 
-    if (c < 0 || c > h) {
-        alert("The model suggests this drop is physically impossible with current chord types.");
-    } else {
-        document.getElementById('optChord').innerText = c.toFixed(4);
-        document.getElementById('predictionResult').style.display = 'block';
+    const b = globalCoeffs;
+    // Linear solve for c
+    const c = (targetD - b[0] - b[1]*h - b[2]*m) / b[3];
+
+    if (isNaN(c) || !isFinite(c)) {
+        return alert("Model coefficient for chord is ~0 — cannot solve. Need more varied chord data.");
     }
+    if (c < 0 || c > 2) {   // sanity bounds
+        alert(`Solved chord = ${c.toFixed(4)} m, which is outside a plausible range.\nThe model may not generalise to H=${h}, M=${m}. Proceed with caution.`);
+    }
+
+    // Verify: plug back in
+    const dCheck = b[0] + b[1]*h + b[2]*m + b[3]*c;
+
+    document.getElementById('optChord').innerText         = c.toFixed(4);
+    document.getElementById('predTarget').innerText       = dCheck.toFixed(2);
+    document.getElementById('predTargetLabel').innerText  = targetD.toFixed(2);
+    document.getElementById('predictionResult').style.display = 'block';
 }
 
+// ────────────────────────────────────────────────
+// Append confirmed result back into the textarea & re-run
+// ────────────────────────────────────────────────
 function appendToData() {
-    const h = document.getElementById('predH').value;
-    const m = document.getElementById('predM').value;
-    const c = document.getElementById('optChord').innerText;
+    const h    = document.getElementById('predH').value;
+    const m    = document.getElementById('predM').value;
+    const c    = document.getElementById('optChord').innerText;
     const dist = document.getElementById('actualDist').value;
 
-    if(!dist) return alert("Enter the actual distance first!");
+    if (!dist) return alert("Enter the actual distance first!");
 
-    const newData = `\n${h} ${m} ${c} ${dist}`;
-    document.getElementById('dataInput').value += newData;
-    
-    alert("New data point added! Re-running analysis...");
+    document.getElementById('dataInput').value += `\n${h} ${m} ${c} ${dist}`;
+
+    alert("Added! Re-running analysis…");
     analyze();
-    
-    // Reset predictor
+
+    // Reset predictor UI
     document.getElementById('predictionResult').style.display = 'none';
-    document.getElementById('actualDist').value = "";
+    document.getElementById('actualDist').value = '';
 }
 </script>
 </body>
